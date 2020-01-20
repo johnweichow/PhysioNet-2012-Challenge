@@ -14,7 +14,16 @@ df_gen_desc = pd.read_csv(os.path.join(filepath, 'interim', 'set-a_general-descr
 df_outcomes = pd.read_csv(os.path.join(filepath, 'raw', 'Outcomes-a.txt'))
 
 # pivot general descriptors so each row is one ID
-df_gen_desc = pd.pivot_table(df_gen_desc, values='Value', index='RecordID', columns='Parameter').reset_index()
+df_gen_desc = (
+	pd.pivot_table(df_gen_desc, values='Value', index='RecordID', columns='Parameter')
+	  .reset_index()
+)
+
+# one-hot encode ICUType
+df_gen_desc.loc[:, 'ICUType'] = df_gen_desc.loc[:, 'ICUType'].apply(int)
+df_ICU_onehot = pd.get_dummies(df_gen_desc['ICUType'], prefix='ICUType', drop_first=True)
+df_gen_desc.drop('ICUType', axis=1, inplace=True)
+df_gen_desc = pd.merge(df_gen_desc, df_ICU_onehot, left_index=True, right_index=True, how='left')
 
 # create list of features to calculate for each patient parameter. 
 default_fc_params_custom = {
