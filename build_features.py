@@ -65,6 +65,11 @@ df_ts_tsfresh = extract_features(df_ts.dropna().set_index('Time'), column_id = '
 
 df_ts_tsfresh = df_ts_tsfresh.reset_index().rename(columns={'id':'RecordID'})
 
+# for features that measure the count of a parameter, impute nulls with 0
+for colname in df_ts_tsfresh.columns:
+	if '__length' in colname:
+		df_ts_tsfresh[colname].fillna(0, inplace=True)
+
 # define helper functions to handle dataframes from custom timeseries calculations
 def drop_and_flatten(df):
     df.columns = df.columns.droplevel(0) #drops unwanted 'Value level'
