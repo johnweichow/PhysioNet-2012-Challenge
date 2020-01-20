@@ -115,3 +115,18 @@ df_features = (
 	  .merge(df_ts_first_last, how='left', on='RecordID', validate='1:1')
 	  .merge(df_ts_means, how='left', on='RecordID', validate='1:1')
 )
+
+# drop features that are more than 30% null
+df_features = df_features.loc[:, df_features.isna().mean() <= 0.3]
+
+# merge features with outcomes
+df_features_outcomes = (
+	pd.merge(df_features, df_outcomes.loc[:, ['RecordID', 'In-hospital_death']],
+	         how='left', on='RecordID', validate='1:1')
+)
+
+# save processed data to disk
+export_folder = os.path.join('.', 'data', 'processed')
+os.makedirs(export_folder)
+filepath = os.path.join(export_folder, 'df_features_outcomes.csv')
+df_features_outcomes.to_csv(filepath, index=False)
