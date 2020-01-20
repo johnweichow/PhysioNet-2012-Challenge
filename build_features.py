@@ -128,5 +128,5 @@ df_features_outcomes = (
 # save processed data to disk
 export_folder = os.path.join('.', 'data', 'processed')
 os.makedirs(export_folder)
-filepath = os.path.join(export_folder, 'df_features_outcomes.csv')
+filepath = os.path.join(export_folder, 'features_and_outcomes.csv')
 df_features_outcomes.to_csv(filepath, index=False)
