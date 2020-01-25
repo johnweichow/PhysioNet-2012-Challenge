@@ -3,7 +3,7 @@
 
 '''
 TO DO: 
-4. Create Outputs file
+Create Outputs file
 '''
 
 import pandas as pd
@@ -15,7 +15,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split, RandomizedSearchCV, GridSearchCV
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import f1_score, precision_score, recall_score
+from sklearn.metrics import f1_score, precision_score, recall_score, make_scorer
 
 from imblearn.ensemble import BalancedRandomForestClassifier
 
@@ -40,9 +40,12 @@ X_train_oor_imp = oor_imputer.fit_transform(X_train)
 ss = StandardScaler()
 X_train_med_imp_ss = ss.fit_transform(X_train_med_imp)
 
-'''
-Score tracker and helper functions go here
-'''
+
+def contest_score_func(y, y_pred):
+	return min(recall_score(y, y_pred), precision_score(y, y_pred))
+
+contest_scorer = make_scorer(contest_score_func)
+
 
 class ScoreTracker:
     
@@ -74,7 +77,7 @@ def score_model(estimator, param_grid, X_train, y_train, ScoreTracker, model_nam
 	Stores the best score into ScoreTracker with the specified model_name
 	'''
 	gscv = GridSearchCV(estimator=estimator, cv=3, param_grid=param_grid,
-	                  	verbose=0, n_jobs=-1, scoring='f1',
+	                  	verbose=0, n_jobs=-1, scoring=contest_scorer,
 						return_train_score=False)
 
 	gscv.fit(X_train, y_train)
@@ -124,7 +127,7 @@ score_model(brf, brf_baseline_params, X_train_oor_imp, y_train,
 # hyperparameter for further optimization
 brf_random_params = {
 	'n_estimators': [10, 100, 1000, 2000],
-	'max_depth': [10, 100, None],
+	'max_depth': [4, 10, 100, None],
 	'min_samples_split': [2, 8, 32, 128],
 	'min_samples_leaf': [1, 2, 8, 32, 128], 
 	'max_features': ['auto', 'log2', None],
@@ -132,22 +135,101 @@ brf_random_params = {
 }
 
 rscv = RandomizedSearchCV(brf, brf_random_params, n_iter=200, 
-	                      scoring='f1', verbose=1, n_jobs=-1,
+	                      scoring=contest_scorer, verbose=1, n_jobs=-1,
 						  cv=3)
 rscv.fit(X_train_med_imp, y_train)
 print(rscv.best_score_)
+print(rscv.best_params_)
 
 # Perform grid search to finalize hyperparameter tuning
 brf_grid_params = {
-	'n_estimators': [1000, 2000, 4000],
-	'max_depth': [2, 10],
-	'min_samples_split': [2],
-	'min_samples_leaf': [2], 
-	'max_features': ['auto'],
+	'n_estimators': [25, 50, 75, 100],
+	'max_depth': [2, 4, 8],
+	'min_samples_split': [4, 8, 16, 32],
+	'min_samples_leaf': [1, 2, 4], 
+	'max_features': ['log2'],
 	'bootstrap': [True]
 }
 
 brf_gscv = GridSearchCV(estimator=brf, cv=3, param_grid=brf_grid_params,
-						verbose=1, n_jobs=-1, scoring='f1')
+						verbose=1, n_jobs=-1, scoring=contest_scorer)
 brf_gscv.fit(X_train_med_imp, y_train)
-brf_gscv.best_params_
+
+best_brf = brf_gscv.best_estimator_
+best_brf.fit(X_train_med_imp, y_train)
+
+X_test_med_imp = median_imputer.fit_transform(X_test)
+X_test_med_imp_ss = ss.fit_transform(X_test_med_imp)
+
+y_pred = best_brf.predict(X_test_med_imp)
+
+
+def get_best_threshold(fit_model, X_test, y_test):
+    '''
+    Given a fit model, returns classification threshold that maximizes contest score for X_test, y_test
+    '''
+    d = []
+    predicted_probabilities = fit_model.predict_proba(X_test)[:,1] # get prediction probabilities for death
+    
+    for threshold in np.linspace(0,1,101):
+        preds_at_threshold = (predicted_probabilities >= threshold).astype(int)
+        if sum(preds_at_threshold) == 0: 
+            f1 = 0
+            precision = 0
+        else:
+            f1 = f1_score(y_test, preds_at_threshold)
+            precision = precision_score(y_test, preds_at_threshold)
+        recall = recall_score(y_test, preds_at_threshold)
+        contest_score = min(precision, recall) # use the scoring system of the actual competiton
+        d.append({'threshold':threshold, 'f1': f1, 'precision':precision, 'recall':recall, 'contest_score':contest_score})
+    df_scores = pd.DataFrame(d)
+    max_score = df_scores['contest_score'].max()
+    # add mean in case there were multiple rows with max score
+    best_threshold = df_scores.loc[df_scores['contest_score']==max_score, 'threshold'].mean() 
+    best_precision = df_scores.loc[df_scores['contest_score']==max_score, 'precision'].mean()
+    best_recall = df_scores.loc[df_scores['contest_score']==max_score, 'recall'].mean()
+    best_f1 = df_scores.loc[df_scores['contest_score']==max_score, 'f1'].mean()    
+    print('Contest Score of {:2.2%} at threshold of {:2.0%}'.format(max_score, best_threshold))
+    print('(Precision: {:2.2%} | Recall: {:2.2%} | F1: {:2.2%}))'.format(best_precision, best_recall, best_f1))
+    print('\n')
+    return best_threshold
+
+def get_score_at_threshold(fit_model, X_test, y_test, threshold):
+    '''
+    Given a fit model and classification threshold, returns contest score by predicting probabilities for
+    X_test, y_test at the given threshold
+    '''
+    predicted_probabilities = fit_model.predict_proba(X_test)[:,1] # get prediction probabilities for death
+    preds_at_threshold = (predicted_probabilities >= threshold).astype(int)
+    precision = precision_score(y_test, preds_at_threshold)
+    recall = recall_score(y_test, preds_at_threshold)
+    f1 = f1_score(y_test, preds_at_threshold)
+    score = min(precision, recall)
+    print('Expected Contest Score of {:2.2%} at threshold of {:2.0%}'.format(score, threshold))
+    print('(Precision: {:2.2%} | Recall: {:2.2%} | F1: {:2.2%}))'.format(precision, recall, f1))
+
+# get threshold that maximizes contest score for training data
+best_threshold = get_best_threshold(best_brf, X_train_med_imp, y_train)
+
+# check expected contest score on test data, using that threshold 
+get_score_at_threshold(best_brf, X_test_med_imp, y_test, best_threshold)
+
+
+lr_grid_params = {
+    'penalty': ['l1', 'l2'],
+    'C': [10**x for x in np.linspace(-7, 3, 22)]
+}
+
+lr_gcsv = GridSearchCV(estimator=lr, param_grid=lr_grid_params, cv = 3, verbose = 2,
+                       scoring=contest_scorer, n_jobs=-1, return_train_score=True)
+lr_gcsv.fit(X_train_med_imp_ss, y_train)
+
+best_lr = lr_gcsv.best_estimator_
+
+best_lr.fit(X_train_med_imp_ss, y_train)
+
+# get threshold that maximizes contest score for training data
+best_threshold = get_best_threshold(best_lr, X_train_med_imp_ss, y_train)
+
+# check expected contest score on test data, using that threshold 
+get_score_at_threshold(best_lr, X_test_med_imp_ss, y_test, best_threshold)
