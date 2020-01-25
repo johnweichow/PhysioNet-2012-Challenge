@@ -27,7 +27,7 @@ for filename in os.listdir(fp):
 # set negative values to null
 df.loc[df['Value']<0, 'Value'] = np.nan
 
-# remove outliers
+# remove outliers and impossible values
 df.loc[(df['Parameter']=='pH') & (df['Value']<6.8), 'Value'] = np.nan
 df.loc[(df['Parameter']=='pH') & (df['Value']>8), 'Value'] = np.nan
 
@@ -41,6 +41,12 @@ df.loc[(df['Parameter']=='RespRate') & (df['Value']<1), 'Value'] = np.nan
 
 df.loc[(df['Parameter']=='Weight') & (df['Value']<20), 'Value'] = np.nan
 
+df.loc[(df['Parameter']=='SysABP') & (df['Value']<1), 'Value'] = np.nan
+df.loc[(df['Parameter']=='NISysABP') & (df['Value']<1), 'Value'] = np.nan
+df.loc[(df['Parameter']=='MAP') & (df['Value']<1), 'Value'] = np.nan
+df.loc[(df['Parameter']=='NIMAP') & (df['Value']<1), 'Value'] = np.nan
+df.loc[(df['Parameter']=='DiasABP') & (df['Value']<1), 'Value'] = np.nan
+df.loc[(df['Parameter']=='NIDiasABP') & (df['Value']<1), 'Value'] = np.nan
 
 # create a separate dataframe w/ general descriptors
 df_gen_desc = df.loc[df['Time']=='00:00', :].copy()
