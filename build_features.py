@@ -116,9 +116,6 @@ df_features = (
 	  .merge(df_ts_means, how='left', on='RecordID', validate='1:1')
 )
 
-# drop features that are more than 30% null
-df_features = df_features.loc[:, df_features.isna().mean() <= 0.3]
-
 # merge features with outcomes
 df_features_outcomes = (
 	pd.merge(df_features, df_outcomes.loc[:, ['RecordID', 'In-hospital_death']],

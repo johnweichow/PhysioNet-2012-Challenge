@@ -40,7 +40,7 @@ X_test_med_imp = median_imputer.transform(X_test)
 X_train_oor_imp = oor_imputer.fit_transform(X_train)
 X_test_oor_imp = oor_imputer.transform(X_test)
 
-# use standard scaling on median imputed data for use with regularized logistic regression
+# use standard scaling on median imputed data
 ss = StandardScaler()
 X_train_med_imp_ss = ss.fit_transform(X_train_med_imp)
 X_test_med_imp_ss = ss.transform(X_test_med_imp)
@@ -70,16 +70,16 @@ class ScoreTracker:
         self.score_dict_['std_test_score'].append(std_test_score)
 
 def score_model(estimator, param_grid, X_train, y_train, ScoreTracker, model_name):
-	'''
-	Performs a GridSearchCV on estimator using param_grid, X_train, and y_train.
-	Stores the best score into ScoreTracker with the specified model_name
-	'''
-	gscv = GridSearchCV(estimator=estimator, cv=3, param_grid=param_grid,
-	                  	verbose=0, n_jobs=-1, scoring='f1',
-						return_train_score=False)
+    '''
+    Performs a GridSearchCV on estimator using param_grid, X_train, and y_train.
+    Stores the best score into ScoreTracker with the specified model_name
+    '''
+    gscv = GridSearchCV(estimator=estimator, cv=3, param_grid=param_grid,
+                        verbose=0, n_jobs=-1, scoring='f1',
+                        return_train_score=False)
 
-	gscv.fit(X_train, y_train)
-	ScoreTracker.add_best_score(GridSearchCV=gscv, model_name=model_name)
+    gscv.fit(X_train, y_train)
+    ScoreTracker.add_best_score(GridSearchCV=gscv, model_name=model_name)
 
 # create a ScoreTracker to track model performance
 scoretracker = ScoreTracker()
@@ -120,8 +120,6 @@ score_model(brf, brf_baseline_params, X_train_med_imp, y_train,
 score_model(brf, brf_baseline_params, X_train_oor_imp, y_train,
 	  	    scoretracker, 'Balanced Random Forest | Out-of-range Imputed')
 
-print(scoretracker.score_dict_)
-
 # Balanced Random Forest on median imputed data is performing the best out of the
 # baseline models. Perform RandomizedSearchCV to find a range for each
 # hyperparameter for further optimization
@@ -134,7 +132,7 @@ brf_random_params = {
 	'bootstrap': [True]
 }
 
-rscv = RandomizedSearchCV(brf, brf_random_params, n_iter=200, 
+rscv = RandomizedSearchCV(brf, brf_random_params, n_iter=100, 
 	                      scoring='f1', verbose=1, n_jobs=-1,
 						  cv=3)
 rscv.fit(X_train_med_imp, y_train)
@@ -236,11 +234,19 @@ best_threshold = get_best_threshold(best_lr, X_train_med_imp_ss, y_train)
 get_score_at_threshold(best_lr, X_test_med_imp_ss, y_test, best_threshold)
 
 
-pca = PCA(n_components=100)
+pca = PCA(n_components=80)
 X_train_pca = pca.fit_transform(X_train_med_imp_ss)
 X_test_pca = pca.transform(X_test_med_imp_ss)
+sum(pca.explained_variance_ratio_)
+
+brf_gscv = GridSearchCV(estimator=brf, cv=3, param_grid=brf_grid_params,
+						verbose=1, n_jobs=-1, scoring='f1')
+brf_gscv.fit(X_train_pca, y_train)
+
+best_brf = brf_gscv.best_estimator_
 
 best_brf = brf_gscv.best_estimator_
 best_brf.fit(X_train_pca, y_train)
 best_threshold = get_best_threshold(best_brf, X_train_pca, y_train)
 get_score_at_threshold(best_brf, X_test_pca, y_test, best_threshold)
+
