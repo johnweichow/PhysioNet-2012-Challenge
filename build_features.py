@@ -7,7 +7,6 @@ import os
 import math
 from tsfresh.feature_extraction import extract_features
 
-df_ICU_onehot = pd.get_dummies(df_gen_desc['ICUType'], prefix='ICUType', drop_first=True)
 def build_features(set_name):
 	# import data
 	filepath = os.path.join('.', 'data')
