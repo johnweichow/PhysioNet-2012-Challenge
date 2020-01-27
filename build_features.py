@@ -29,11 +29,11 @@ def build_features(set_name):
 	# create list of features to calculate for each patient parameter. 
 	default_fc_params_custom = {
 		'median': None,
-			'variance': None,
-			'maximum': None,
-			'minimum': None,
-			'length': None, #denotes count
-			'linear_trend': [{'attr': 'slope'}]
+		'variance': None,
+		'maximum': None,
+		'minimum': None,
+		'length': None, #denotes count
+		'linear_trend': [{'attr': 'slope'}]
 	}
 
 	# Create features that count the occurences of parameters in certain ranges. 
